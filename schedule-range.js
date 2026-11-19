@@ -1,0 +1,178 @@
+(() => {
+  const get = id => document.getElementById(id);
+  const form = interviewForm, fields = form.elements;
+  const start = get('range-start'), end = get('range-end'), jump = get('jump-date');
+  const format = n => String(Math.floor(n/60)).padStart(2,'0') + ':' + String(n%60).padStart(2,'0');
+  const clock = n => (Math.floor(n/60)%12||12)+':'+String(n%60).padStart(2,'0')+' PM';
+  const minutes = value => value ? Number(value.slice(0,2))*60 + Number(value.slice(3)) : NaN;
+  const day = 86400000;
+  const parts = new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+  const part = name => parts.find(p=>p.type===name).value;
+  const today = part('year')+'-'+part('month')+'-'+part('day');
+  const stamp = date => Date.parse(date+'T12:00:00Z');
+  const iso = n => new Date(n).toISOString().slice(0,10);
+  const monday = stamp(today) - ((new Date(stamp(today)).getUTCDay()+6)%7)*day;
+  jump.min = fields.date.min = iso(monday);
+  jump.max = fields.date.max = iso(monday+90*day);
+  let week = 0, request = 0, openings = null, error = false;
+  const gaps = date => (openings || []).filter(item=>item.date===date);
+  function paint(windows,a,b) {
+    const points = [...new Set([840,1020,a,b,...windows.flatMap(w=>[w.start,w.end])].filter(n=>Number.isFinite(n)&&n>=840&&n<=1020))].sort((x,y)=>x-y);
+    const stops = points.slice(0,-1).map((x,i)=>{
+      const y=points[i+1], free=windows.some(w=>w.start<=x&&y<=w.end), selected=a<=x&&y<=b;
+      const color=selected?(free?'#14804c':'#ba3942'):(free?'#a4d5b8':'#969da4');
+      return color+' '+(x-840)/1.8+'% '+(y-840)/1.8+'%';
+    });
+    return 'linear-gradient(to right,'+stops.join(',')+')';
+  }
+  function selection(){
+    const a=minutes(fields.start.value), b=minutes(fields.end.value), windows=gaps(fields.date.value);
+    start.value=Number.isFinite(a)?a:840; end.value=Number.isFinite(b)?b:1020;
+    start.setAttribute('aria-valuetext',clock(+start.value)); end.setAttribute('aria-valuetext',clock(+end.value));
+    const valid=!!openings && windows.some(w=>w.start<=a&&a<b&&b<=w.end);
+    get('range-track').style.background=openings?paint(windows,a,b):'#969da4';
+    get('selection').textContent=Number.isFinite(a)&&Number.isFinite(b)?fields.start.value+' – '+fields.end.value+' Eastern':'Choose start and end times';
+    get('range-note').textContent=!openings?(error?'Availability unavailable. Retry the week.':'Loading availability…'):valid?(b-a)+' minutes available':a>=b?'End must follow start.':'Red marks selected time outside an opening.';
+    fields.end.setCustomValidity(valid?'':'Choose a range within one available opening.');
+    form.querySelector('[type=submit]').disabled=!valid||!window.bookingIdentityReady?.();
+  }
+  function render(){
+    const list=get('week-days');list.replaceChildren();
+    for(let i=0;i<7;i++){
+      const date=iso(monday+(week*7+i)*day), windows=gaps(date), btn=document.createElement('button');
+      btn.type='button';btn.setAttribute('aria-pressed',String(date===fields.date.value));
+      const name=document.createElement('strong'),track=document.createElement('span'), info=document.createElement('small');
+      name.textContent=new Date(stamp(date)).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',timeZone:'UTC'});
+      track.className='day-track';track.style.background=paint(windows);
+      info.textContent=!openings?(error?'Availability unknown':'Loading…'):windows.length?windows.map(w=>clock(w.start)+' – '+clock(w.end)).join(' · '):'Unavailable';
+      btn.append(name,track,info);btn.onclick=()=>choose(date);list.append(btn);
+    }
+    selection();
+  }
+  function choose(date){
+    if(!date||date<jump.min||date>jump.max){selection();return}
+    fields.date.value=jump.value=date;
+    const n=Math.floor((stamp(date)-monday)/(7*day));
+    if(n!==week){form.dispatchEvent(new Event('input',{bubbles:true}));loadWeek(n);return}
+    const first=gaps(date)[0]; fields.start.value=format(first?.start??840);fields.end.value=format(first?Math.min(first.start+30,first.end):870);render();
+    form.dispatchEvent(new Event('input',{bubbles:true}));
+  }
+  const cache=new Map();
+  function getWindows(n,refresh=false){
+    if(!Number.isInteger(n)||n<0||n>12)return Promise.reject(new Error("Date outside booking window"));
+    if(refresh)cache.delete(n);
+    const entry=cache.get(n);
+    if(entry && Date.now()-entry.time<60000)return entry.promise;
+    const promise=(async()=>{
+      const response=await fetch(form.action+'?view=windows&week='+n,{cache:'no-store'});
+      if(!response.ok)throw Error();
+      const body=(await response.text()).trim();
+      const json=body.replace(/^window\.showInterviewWindows\(/,'').replace(/\);$/,'');
+      const data=JSON.parse(json);
+      if(!Array.isArray(data.openings)||data.error)throw Error();
+      data.openings=data.openings.filter(w=>/^\d{4}-\d{2}-\d{2}$/.test(w.date)&&Number.isFinite(w.start)&&Number.isFinite(w.end)&&w.start>=840&&w.end<=1020&&w.start<w.end);
+      for (const value of ['Microsoft Teams','Phone call']) {
+        const option=fields.format.querySelector('option[value="'+value+'"]');
+        if(option){option.disabled=!data.additionalFormats;option.textContent=data.additionalFormats?value:value+' (setup pending)';}
+      }
+      window.zoomOAuthAvailable=Boolean(data.zoomOAuthAvailable);
+      if(window.bookingAuth)window.bookingAuth.render();
+      const zoomOption = fields.format.querySelector('option[value="Zoom"]');
+      if (zoomOption) {
+        zoomOption.disabled = !data.zoomAvailable;
+        zoomOption.textContent = data.zoomAvailable ? 'Zoom' : 'Zoom (setup pending)';
+      } else if (data.zoomAvailable && !fields.format.querySelector('option[value="Zoom"]')) {
+        fields.format.add(new Option('Zoom', 'Zoom'));
+      }
+      return data;
+    })().catch(err=>{cache.delete(n);throw err});
+    cache.set(n,{promise,time:Date.now()});return promise;
+  }
+  const panel=get('month-panel'), toggle=get('month-toggle'), grid=get('month-grid');
+  let month, generation=0;
+  const shiftMonth=(ym,delta)=>{const d=new Date(ym+'-01T12:00:00Z');d.setUTCMonth(d.getUTCMonth()+delta);return iso(+d).slice(0,7)};
+  function closeMonth(){panel.hidden=true;toggle.setAttribute('aria-expanded','false');generation++}
+  async function drawMonth(){
+    const version=++generation, first=stamp(month+'-01'), next=stamp(shiftMonth(month,1)+'-01');
+    get('month-name').textContent=new Date(first).toLocaleDateString('en-US',{month:'long',year:'numeric',timeZone:'UTC'});
+    get('month-prev').disabled=month<=jump.min.slice(0,7);get('month-next').disabled=month>=jump.max.slice(0,7);
+    grid.replaceChildren();
+    for(const name of ['Mo','Tu','We','Th','Fr','Sa','Su']){const el=document.createElement('small');el.textContent=name;grid.append(el)}
+    const groups=new Map();
+    for(let t=first;t<next;t+=day){
+      const date=iso(t), button=document.createElement('button');button.type='button';button.textContent=Number(date.slice(-2));button.setAttribute('aria-label',date);
+      if(t===first)button.style.gridColumnStart=1+(new Date(t).getUTCDay()+6)%7;
+      button.disabled=date<jump.min||date>jump.max;button.setAttribute('aria-pressed',String(date===fields.date.value));
+      button.onclick=()=>{closeMonth();choose(date);toggle.focus()};grid.append(button);
+      if(!button.disabled){const w=Math.floor((t-monday)/(7*day));if(!groups.has(w))groups.set(w,[]);groups.get(w).push([date,button])}
+    }
+    get('month-key').textContent='Checking openings…';
+    let failed=false;
+    await Promise.all([...groups].map(async ([w,days])=>{
+      try{const data=await getWindows(w);if(version!==generation)return;
+        for(const [date,btn] of days){const free=data.openings.some(o=>o.date===date);btn.classList.toggle('has-opening',free);btn.setAttribute('aria-label',date+(free?', openings available':', unavailable'))}
+      }catch{failed=true}
+    }));
+    if(version===generation)get('month-key').textContent=failed?'Some dates could not be checked. Reopen to retry.':'Green dot · openings available';
+  }
+  toggle.onclick=()=>{if(!panel.hidden){closeMonth();return}month=fields.date.value.slice(0,7)||today.slice(0,7);panel.hidden=false;toggle.setAttribute('aria-expanded','true');drawMonth()};
+  for(const [name,step] of [['month-prev',-1],['month-next',1]])get(name).onclick=()=>{month=shiftMonth(month,step);drawMonth()};
+  document.addEventListener('click',e=>{if(!panel.hidden&&!toggle.parentElement.contains(e.target))closeMonth()});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!panel.hidden){closeMonth();toggle.focus()}});
+  get('next-opening').onclick=async()=>{
+    closeMonth();const button=get('next-opening'), status=get('opening-status');button.disabled=true;status.textContent='Finding next opening…';
+    try{
+      const from=fields.date.value||today, after=minutes(fields.start.value);
+      for(let w=Math.max(0,Math.floor((stamp(from)-monday)/(7*day)));w<=12;w++){
+        const data=await getWindows(w);
+        const match=data.openings.find(o=>o.date>from||(o.date===from&&(!Number.isFinite(after)||o.start>after||!gaps(from).some(g=>g.start<=after&&after<g.end)&&o.start===after)));
+        if(match){fields.date.value=jump.value=match.date;if(week!==w||!openings)await loadWeek(w);else choose(match.date);
+          fields.start.value=format(match.start);fields.end.value=format(Math.min(match.end,match.start+30));form.dispatchEvent(new Event('input',{bubbles:true}));status.textContent='';return}
+      }
+      status.textContent='No later openings in the booking window.';
+    }catch{status.textContent='Could not check the calendar. Try again.'}finally{button.disabled=false}
+  };
+  async function loadWeek(n){
+    week=n;const id=++request; openings=null;error=false;
+    get('prev-week').disabled=n===0;get('next-week').disabled=n===12;
+    get('week-status').textContent='Loading week…';render();
+    try{
+      const data=await getWindows(n);
+      if(id!==request)return;
+      openings=data.openings;get('week-status').textContent='Week of '+iso(monday+n*7*day)+' · Eastern time';
+      choose(fields.date.value);
+    }catch(e){if(id!==request)return;error=true;get('week-status').replaceChildren('Calendar could not be loaded. ');const retry=document.createElement('button');retry.type='button';retry.textContent='Retry';retry.onclick=()=>loadWeek(n);get('week-status').append(retry);render()}
+  }
+  for(const [id,delta] of [['prev-week',-1],['next-week',1]])get(id).onclick=()=>choose(iso(monday+(week+delta)*7*day));
+  jump.onchange=()=>choose(jump.value);fields.date.onchange=()=>choose(fields.date.value);
+  for(const slider of [start,end])slider.oninput=()=>{
+    if(slider===start)start.value=Math.min(+start.value,+end.value-5);
+    else end.value=Math.max(+end.value,+start.value+5);
+    fields.start.value=format(+start.value);fields.end.value=format(+end.value);
+    form.dispatchEvent(new Event('input',{bubbles:true}));
+  };
+  form.addEventListener('input',selection);form.addEventListener('signin',selection);
+  form.addEventListener('submit',e=>{selection();if(!form.reportValidity())e.preventDefault()});
+  const weekFor=date=>Math.floor((stamp(date)-monday)/(7*day));
+  const contains=(data,date,a,b)=>Number.isFinite(a)&&Number.isFinite(b)&&a<b&&b-a<=180&&data.openings.some(w=>w.date===date&&w.start<=a&&b<=w.end);
+  window.interviewCalendar={
+    today,maxDate:jump.max,weekFor,getWindows,
+    async selectRange(date,a,b){
+      const n=weekFor(date),data=await getWindows(n,true);
+      if(!contains(data,date,a,b))throw Error('Time unavailable');
+      request++;week=n;openings=data.openings;error=false;
+      fields.date.value=jump.value=date;fields.start.value=format(a);fields.end.value=format(b);
+      get('prev-week').disabled=n===0;get('next-week').disabled=n===12;
+      get('week-status').textContent='Week of '+iso(monday+n*7*day)+' · Eastern time';
+      form.dispatchEvent(new Event('input',{bubbles:true}));render();
+    },
+    async verifySelection(){
+      const date=fields.date.value,a=minutes(fields.start.value),b=minutes(fields.end.value);
+      const data=await getWindows(weekFor(date),true);
+      if(!contains(data,date,a,b))throw Error('Time unavailable');
+      if(date!==fields.date.value||a!==minutes(fields.start.value)||b!==minutes(fields.end.value))throw Error('Selection changed');
+      openings=data.openings;selection();return true;
+    }
+  };
+  fields.date.value=jump.value=today;loadWeek(0);
+})();
