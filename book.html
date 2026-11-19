@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Book a tutoring session | Patrick Kruse</title><link rel="icon" href="favicon.svg?v=pk-chip"><link rel="stylesheet" href="styles.css?v=interview-links-2"><script>try{const t=localStorage.getItem('pk-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch{}</script><script defer src="main.js?v=image-controls-2"></script>
+<style>
+.questions{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:12px}
+.questions button{font:inherit;text-align:left;padding:18px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:inherit;cursor:pointer}
+.questions button[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 -3px var(--accent);color:var(--accent)}
+.answer{display:grid;grid-template-columns:1.2fr 1fr;align-items:center;gap:clamp(20px,4vw,56px);margin-top:28px}
+.recording{display:grid;place-items:center;aspect-ratio:16/9;background:var(--surface-2);border:1px dashed var(--line);border-radius:6px;color:var(--muted)}
+.answer h2{font-size:clamp(1.4rem,3vw,2rem)}.answer p{line-height:1.65}
+@media(max-width:700px){.answer{grid-template-columns:1fr}}
+</style><style>.name-block.ask-heading{display:flex;align-items:center;justify-content:space-between;gap:24px}.ask-heading>div{min-width:0}.ask-portrait{width:160px;height:160px;flex-shrink:0;object-fit:cover;border-radius:50%;border:1px solid var(--line)}@media(max-width:650px){.name-block.ask-heading{gap:16px}.ask-heading h1{font-size:clamp(32px,8vw,48px)}.ask-portrait{width:clamp(72px,22vw,110px);height:auto;aspect-ratio:1}.ask-heading .eyebrow{font-size:9px}}</style><link rel="stylesheet" href="booking-assistant.css?v=guided-2"><script src="zoom-auth.js?v=account-dialog-3" defer></script><script src="booking-assistant.js?v=combined-oauth-1" defer></script></head>
+<body><header><div class="nav-row"><a class="brand" href="./" aria-label="Tutoring home">PK</a><strong>Kruse Tutoring</strong><nav><a href="./#subjects">Subjects</a><a href="book.html#schedule"><b>Book a session</b></a></nav><fieldset class="theme"><legend class="sr-only">Color theme</legend><button data-theme-choice="light" aria-pressed="false">☀ Light</button><button data-theme-choice="dark" aria-pressed="false">☾ Dark</button></fieldset></div></header><main><section class="sheet" id="schedule" aria-labelledby="schedule-title">
+<h2 id="schedule-title">Book a tutoring session</h2>
+<div class="booking-layout"><div class="booking-main"><div id="availability"><h3>Availability calendar</h3><div class="week-tools" style="margin-block-start:0;padding-block-start:16px"><button id="prev-week" type="button">← Previous week</button><div class="month-picker"><button id="month-toggle" type="button" aria-expanded="false" aria-controls="month-panel">Jump to date</button><input type="hidden" id="jump-date"><div id="month-panel" hidden><div class="month-nav"><button id="month-prev" aria-label="Previous month">‹</button><strong id="month-name"></strong><button id="month-next" aria-label="Next month">›</button></div><div id="month-grid"></div><small id="month-key" role="status"></small></div></div><button type="button" id="next-opening">Jump to next opening</button><small id="opening-status" role="status"></small><button id="next-week" type="button">Next week →</button></div><p id="week-status" role="status"></p><div id="week-days"></div></div>
+<form id="interview-form" method="post" action="https://script.google.com/macros/s/AKfycbwL6Ai7tqXTs6gc_29alKRTHFxbMTsb1Meg4zW9dizNchMgDtlQ-IYRosy-UNsMWBvoHw/exec">
+<fieldset id="picker"><legend>Session time · Eastern</legend><output id="selection"></output><div class="range-box"><div id="range-track"></div><input type="range" min="840" max="1020" step="5" id="range-start" aria-label="Interview start"><input type="range" min="840" max="1020" step="5" id="range-end" aria-label="Interview end"></div><div class="ticks"><span>2 PM</span><span>3 PM</span><span>4 PM</span><span>5 PM</span></div><small id="range-note" role="status"></small></fieldset>
+<label>Date<input type="date" name="date" required></label>
+<label>Start time (Eastern)<input type="time" name="start" min="14:00" max="16:59" required></label>
+<label>End time (Eastern)<input type="time" name="end" min="14:01" max="17:00" required></label>
+<label>Meeting format<select name="format"><option value="Zoom" disabled>Zoom (setup pending)</option><option value="Microsoft Teams" disabled>Microsoft Teams (setup pending)</option><option>Google Meet</option><option>In person</option><option value="Phone call" disabled>Phone call (setup pending)</option></select></label>
+<label hidden id="address-label">Meeting address<input type="text" name="address" autocomplete="street-address" maxlength="300" disabled></label>
+<label hidden id="phone-label">Phone number (including country code)<input type="tel" name="phone" autocomplete="tel" maxlength="40" placeholder="+1 555 123 4567" disabled><small>Patrick will call this number at your booked time.</small></label>
+<label hidden id="teams-label">Microsoft Teams meeting link (optional)<input type="url" name="teams" maxlength="2000" placeholder="https://teams.microsoft.com/…" disabled><small>Provide your meeting link, or Patrick will email one separately.</small></label>
+<input type="hidden" name="token">
+<input type="hidden" name="zoomSession" disabled>
+<input type="hidden" name="zoomVerifier" disabled>
+<div id="booking-google-auth">
+<div id="g_id_onload" data-client_id="970227434245-4cfu822ti8gc29jcjplmshpekqae4gfa.apps.googleusercontent.com" data-callback="interviewSignedIn" data-auto_prompt="false"></div>
+<div class="g_id_signin" data-type="standard"></div></div>
+<div id="booking-zoom-auth" hidden><button type="button" id="zoom-signin" disabled style="background:#0b5cff;color:#fff;font-weight:600">Sign in with Zoom</button><small id="zoom-identity" aria-live="polite"></small></div>
+<span id="booking-status" role="status">Sign in with Google to reserve your time.</span>
+<button type="submit" disabled>Review meeting details</button>
+</form>
+
+<style>#interview-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr));gap:1rem;margin-block:1.5rem}#interview-form label{display:grid;gap:.4rem;align-content:start}#interview-form{align-items:start}#interview-form select{height:auto;min-height:44px}#booking-zoom-auth{display:flex;align-items:flex-start;flex-direction:column;gap:8px}#zoom-signin{width:auto;min-height:44px}#zoom-account-dialog::backdrop{background:#0007}#interview-form [hidden]{display:none}#interview-form :is(input,select,button){font:inherit;padding:.6rem;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:inherit}#interview-form button:enabled{cursor:pointer}#interview-form button:disabled{opacity:.55}#booking-status{align-self:center}</style>
+<script>
+const interviewForm=document.getElementById('interview-form');
+const bookingFields=interviewForm.elements;
+function interviewSignedIn(result){
+  bookingFields.token.value=result.credential;
+  interviewForm.dispatchEvent(new Event('signin'));
+  syncBookingFields();
+}
+function bookingIdentityReady(){
+  return bookingFields.format.value==='Zoom'?Boolean(window.bookingAuth?.zoomReady()):Boolean(bookingFields.token.value);
+}
+window.bookingIdentityReady=bookingIdentityReady;
+function syncBookingFields(){
+  const zoom=bookingFields.format.value==='Zoom';
+  document.getElementById('booking-google-auth').hidden=zoom;
+  document.getElementById('booking-zoom-auth').hidden=!zoom;
+  bookingFields.token.disabled=zoom;bookingFields.zoomSession.disabled=!zoom;bookingFields.zoomVerifier.disabled=!zoom;
+  if(window.bookingAuth)window.bookingAuth.render();
+  else document.getElementById('booking-status').textContent=zoom?'Sign in with Zoom to reserve this meeting.':bookingFields.token.value?'Signed in with Google.':'Sign in with Google to reserve your time.';
+  const physical=bookingFields.format.value==='In person';
+  const phoneCall=bookingFields.format.value==='Phone call';
+  const teamsCall=bookingFields.format.value==='Microsoft Teams';
+  document.getElementById('phone-label').hidden=!phoneCall;
+  bookingFields.phone.disabled=!phoneCall;
+  bookingFields.phone.required=phoneCall;
+  document.getElementById('teams-label').hidden=!teamsCall;
+  bookingFields.teams.disabled=!teamsCall;
+  document.getElementById('address-label').hidden=!physical;
+  bookingFields.address.disabled=!physical;
+  bookingFields.address.required=physical;
+  const weekday=new Date(bookingFields.date.value+'T12:00:00Z').getUTCDay();
+  bookingFields.date.setCustomValidity(bookingFields.date.value && ![2,4].includes(weekday)?'Choose a Tuesday or Thursday.':'');
+  bookingFields.end.setCustomValidity(bookingFields.start.value && bookingFields.end.value && bookingFields.end.value<=bookingFields.start.value?'Choose an end time after the start time.':'');
+}
+interviewForm.addEventListener('input',syncBookingFields);
+interviewForm.addEventListener('submit',e=>{syncBookingFields();if(!interviewForm.reportValidity()||!bookingIdentityReady())e.preventDefault()});
+syncBookingFields();
+</script><link rel="stylesheet" href="schedule-range.css?v=calendar-gap-2"><script src="schedule-range.js?v=calendar-sync-2"></script><dialog id="meeting-review" aria-labelledby="review-heading" style="max-width:min(27rem,90vw);border:1px solid var(--line);border-radius:.65rem;padding:1.5rem;background:var(--surface);color:inherit"><h3 id="review-heading">Confirm meeting details</h3><dl></dl><button type="button" id="edit-meeting" autofocus>Edit details</button> <button type="button" id="confirm-meeting">Confirm and schedule</button></dialog>
+<script>
+(() => {
+  const review = document.getElementById('meeting-review');
+  const submit = interviewForm.querySelector('[type=submit]');
+  let approved = false, submitted = false;
+  interviewForm.addEventListener('submit', event => {
+    if (event.defaultPrevented) return;
+    if (submitted) {event.preventDefault();return;}
+    if (approved) { approved = false; submitted = true; submit.disabled = true; return; }
+    event.preventDefault();
+    const {date,start,end,format,address,phone,teams} = bookingFields;
+    const showTime = value => new Date('2000-01-01T'+value+'Z').toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'UTC'});
+    const details = [
+      ['Date',new Date(date.value+'T12:00:00Z').toLocaleDateString('en-US',{dateStyle:'full',timeZone:'UTC'})],
+      ['Time',showTime(start.value)+' – '+showTime(end.value)+' Eastern'],
+      ['Duration',(end.valueAsNumber-start.valueAsNumber)/60000+' minutes'],
+      ['Meeting format',format.value]
+    ];
+    if (format.value==='In person') details.push(['Meeting address',address.value]);
+    if (format.value==='Phone call') details.push(['Phone number',phone.value],['Call details','Patrick will call you.']);
+    if (format.value==='Microsoft Teams') details.push(['Teams details',teams.value || 'Joining link will be emailed separately.']);
+    const list = review.querySelector('dl');
+    list.replaceChildren();
+    for (const [label,value] of details) {
+      const term=document.createElement('dt'), description=document.createElement('dd');
+      term.textContent=label; description.textContent=value;
+      description.style.margin='0 0 .75rem'; list.append(term,description);
+    }
+    review.showModal();
+  });
+  window.submitReviewedInterview = snapshot => {
+    const current=['date','start','end','format','address','phone','teams'].map(k=>bookingFields[k]?.disabled?'':bookingFields[k]?.value||'').join('|');
+    syncBookingFields();
+    if(submitted||snapshot!==current||!bookingIdentityReady()||!interviewForm.reportValidity())return false;
+    approved=true;
+    try{interviewForm.requestSubmit(submit);}finally{approved=false;}
+    return submitted;
+  };
+  window.addEventListener('pageshow',event=>{if(event.persisted){submitted=false;submit.disabled=false;}});
+  document.getElementById('edit-meeting').onclick=()=>review.close();
+  document.getElementById('confirm-meeting').onclick=()=>{
+    review.close(); approved=true;
+    try { interviewForm.requestSubmit(submit); } finally { approved=false; }
+  };
+})();
+</script><script async defer src="https://accounts.google.com/gsi/client"></script></div><aside class="booking-assistant" id="booking-assistant" aria-labelledby="assistant-title">
+<div class="assistant-header"><span class="assistant-avatar" aria-hidden="true">✧</span><div><h3 id="assistant-title">Scheduling assistant</h3><p>Booking help <span class="assistant-preview">Guided booking</span></p></div><button class="assistant-reset" type="button" aria-label="Start a new chat" title="New chat">↻</button></div>
+<div class="assistant-messages" role="log" aria-label="Scheduling conversation" aria-live="polite" aria-relevant="additions text"></div>
+<div class="assistant-suggestions" aria-label="Suggested questions"><button type="button" data-prompt="When is Patrick available?">Available times</button><button type="button" data-prompt="What meeting formats can I choose?">Meeting formats</button><button type="button" data-prompt="Review my selection">Review my selection</button></div>
+<p id="assistant-selection" aria-label="Current booking selection"></p>
+<form class="assistant-compose" aria-label="Chat message"><label class="sr-only" for="assistant-input">Ask a scheduling question</label><textarea id="assistant-input" rows="2" maxlength="1000" placeholder="Type “book” to get started…" aria-describedby="assistant-disclaimer"></textarea><button class="assistant-send" type="submit" aria-label="Send message" disabled><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button></form>
+<p class="assistant-footnote" id="assistant-disclaimer">Guided booking · no AI. Your details are sent only when you confirm.<br>Availability is rechecked before booking.</p>
+</aside></div></section></main></body></html>
